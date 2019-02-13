@@ -1,0 +1,5 @@
+.stack-work/
+hask-can-weather.cabal
+*~
+data/*
+!data/.gitignore
