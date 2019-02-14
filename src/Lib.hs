@@ -1,27 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lib
-    ( someFunc
-    ) where
+module Lib where
 
 import Control.Exception
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.IO as TLIO
 
-dataFile :: IO (Either IOException TL.Text)
-dataFile = try $ TLIO.readFile "./data/Xeng-daily-01011954-12311954.csv.1"
-
-fileOpenFail :: IOException -> IO ()
-fileOpenFail e = do
-    putStrLn $ "Exception on opening data file: " ++ show e
-
-onlyShowErr :: Show e => IO (Either e a) -> IO ()
-onlyShowErr action = do
-    result <- action
+onlyShowErr :: (Either IOException TL.Text) -> IO ()
+onlyShowErr result = do
     case result of
-        Left e -> print e
-        Right _ -> return ()
+        Left e -> print ("An error occured: " ++ show e)
+        Right file -> TLIO.writeFile "temp" file
 
--- TODO: move printing/exception handling to main
-someFunc :: IO ()
-someFunc = (onlyShowErr dataFile) >>= print
+someFunc :: String -> IO ()
+someFunc fileName = do
+    result <- try $ processData <$> TLIO.readFile fileName
+    onlyShowErr result
+    return ()
+
+processData :: TL.Text -> TL.Text
+processData = id
