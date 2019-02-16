@@ -26,6 +26,7 @@ import Data.Csv-- ( DefaultOrdered(headerOrder)
 
 -- import qualified Data.Csv as Cassava
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Search as BLS
 
 newtype DefaultMin = DefaultMin Float deriving (Eq,Ord,Show,Num)
 
@@ -40,7 +41,7 @@ data Item = Item
 instance FromNamedRecord Item where
     parseNamedRecord m =
         Item <$> m .: "Year" <*> m .: "Month" <*> m .: "Day" <*>
-        m .: "Max Temp (C)"
+        m .: "Max Temp (°C)"
 
 instance FromField DefaultMin where
     parseField s = case runParser (parseField s) of
@@ -52,7 +53,7 @@ tryRead fileName = try $ TLIO.readFile fileName
 
 someFunc :: [String] -> IO ()
 someFunc fileNames = do
-    csvData <- BL.readFile "./data/temp"
+    csvData <- BL.readFile "./data/eng-daily-01011890-12311890.csv"
     let v = processData csvData :: Either String (Vector Item)
     let summed = fmap (foldr summer (DefaultMin 0)) v
     putStrLn $ "Total atBats was: " ++ (show summed)
@@ -65,7 +66,7 @@ someFunc fileNames = do
     --     Right xs -> TLIO.writeFile "./data/temp" $ processData xs
 
 processData :: BL.ByteString -> Either String (Vector Item)
-processData bs = snd <$> decodeByName bs
+processData bs = snd <$> decodeByName (snd $ BLS.breakOn "\"Date/Time" bs)
 -- processData :: [TL.Text] -> TL.Text
 -- processData xs = Cassava.decodeByName file
 --   where
