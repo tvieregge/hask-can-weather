@@ -9,6 +9,7 @@ import Control.Exception
 import qualified Data.Foldable as Foldable
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.IO as TLIO
+import Data.Text.Encoding
 
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector
@@ -41,7 +42,7 @@ data Item = Item
 instance FromNamedRecord Item where
     parseNamedRecord m =
         Item <$> m .: "Year" <*> m .: "Month" <*> m .: "Day" <*>
-        m .: "Max Temp (°C)"
+        m .: (encodeUtf8 "Max Temp (°C)")
 
 instance FromField DefaultMin where
     parseField s = case runParser (parseField s) of
