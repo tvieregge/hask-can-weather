@@ -27,6 +27,7 @@ dependencies:
 - vector
 - cassava
 - bytestring
+- matplotlib >= 0.6.0
 
 library:
   source-dirs: src
