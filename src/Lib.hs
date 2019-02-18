@@ -5,6 +5,8 @@
 
 module Lib where
 
+import Graphics.Matplotlib
+
 import Control.Exception
 
 import qualified Data.Foldable as Foldable
@@ -53,6 +55,8 @@ someFunc fileNames = do
     csvData <- BL.readFile "./data/eng-daily-01011890-12311890.csv"
     let v = processData csvData :: Either String (Vector Item)
     let summed = fmap (foldr summer 0) v
+    let mlineOptions = plot [1,2,3,4,5,6] [1,3,2,5,2,4] @@ [o1 "go-", o2 "linewidth" 2]
+    onscreen mlineOptions
     putStrLn $ "Total atBats was: " ++ (show summed)
   where
     summer i n = case maxTemp i of
