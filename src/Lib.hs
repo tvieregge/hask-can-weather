@@ -35,7 +35,7 @@ data Item = Item
     { year :: Int
     , month :: Int
     , day :: Int
-    , maxTemp :: DefaultMin
+    , maxTemp :: Either Field Float
     } deriving (Eq, Show)
 
 -- autoformat really messes this up...
@@ -44,11 +44,6 @@ instance FromNamedRecord Item where
         Item <$> m .: "Year" <*> m .: "Month" <*> m .: "Day" <*>
         m .: (encodeUtf8 "Max Temp (°C)")
 
-instance FromField DefaultMin where
-    parseField s = case runParser (parseField s) of
-                        Left err -> pure $ DefaultMin (-1000.0)
-                        Right n -> pure $ DefaultMin n
-
 tryRead :: String -> IO (Either IOException TL.Text)
 tryRead fileName = try $ TLIO.readFile fileName
 
@@ -56,10 +51,13 @@ someFunc :: [String] -> IO ()
 someFunc fileNames = do
     csvData <- BL.readFile "./data/eng-daily-01011890-12311890.csv"
     let v = processData csvData :: Either String (Vector Item)
-    let summed = fmap (foldr summer (DefaultMin 0)) v
+    let summed = fmap (foldr summer 0) v
     putStrLn $ "Total atBats was: " ++ (show summed)
   where
-    summer i n = n + maxTemp i
+    summer i n = case maxTemp i of
+                      (Right temp) -> n + temp
+                      (Left _) -> n
+    -- n + maxTemp i
     -- eitherFiles <- mapM tryRead fileNames
     -- let files = sequence eitherFiles
     -- case files of
