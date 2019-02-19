@@ -75,33 +75,33 @@ tryRead fileName = try $ TLIO.readFile fileName
 someFunc :: [String] -> IO ()
 someFunc fileNames = do
     csvData <- BL.readFile "./data/eng-daily-01011890-12311890.csv"
-    let v = snd <$> decodeByName (snd $ BLS.breakOn "\"Date/Time" csvData)
-    let defData = case v of
-         Right x -> x
-         Left e -> Vector.empty --putStrLn "Decoding file failed"
-    let xAxes = map (monthsData $ cleanData defData) [January ..]
-    let p = (\xAxis -> plot [1 .. (length xAxis)] xAxis @@ [ o2 "linewidth" 2])
-    let mlineOptions = map p xAxes
+    let xAxes = map (monthsData $ cleanData csvData) [January ..]
+    let mlineOptions = map plotAxis xAxes
     onscreen $ foldr1 (%) mlineOptions
     putStrLn $ "month: " ++ (show xAxes)
   where
-    twoRights (Right (Right x)) = x -- TODO: This is terrible, deal with error case
-    oneRight (Right x) = x -- TODO: This is terrible, deal with error case
+    plotAxis xAxis = plot [1 .. (length xAxis)] xAxis @@ [o2 "linewidth" 2]
     -- n + maxTemp i
     -- eitherFiles <- mapM tryRead fileNames
     -- let files = sequence eitherFiles
     -- case files of
     --     Left e -> print ("An error occured: " ++ show e)
-    --     Right xs -> TLIO.writeFile "./data/temp" $ processData xs
 
--- processData :: BL.ByteString -> Either String (Vector CsvItem)
--- processData bs = snd <$> decodeByName (snd $ BLS.breakOn "\"Date/Time" bs)
+cleanData :: BL.ByteString -> [DataItem]
+cleanData bs =
+    case decodeData of
+        Right x -> formatData x
+        Left e -> [] --putStrLn "Decoding file failed"
+  where
+    decodeData = snd <$> decodeByName (snd $ BLS.breakOn "\"Date/Time" bs)
 
-cleanData :: Vector CsvItem -> [DataItem]
-cleanData  = Vector.foldr go []
-    where go r rs = case maxTemp r of
-                      Right temp -> DataItem (year r) (month r) (day r) temp : rs
-                      Left e -> rs
+formatData :: Vector CsvItem -> [DataItem]
+formatData = Vector.foldr go []
+  where
+    go r rs =
+        case maxTemp r of
+            Right temp -> DataItem (year r) (month r) (day r) temp : rs
+            Left e -> rs
 
 monthsData :: [DataItem] -> Month -> [Float]
 monthsData vs m = map dMaxTemp filtered
