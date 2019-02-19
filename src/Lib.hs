@@ -80,7 +80,7 @@ someFunc fileNames = do
          Right x -> x
          Left e -> Vector.empty --putStrLn "Decoding file failed"
     let xAxes = map (monthsData $ cleanData defData) [January ..]
-    let p = (\xAxis -> plot [1 .. (length xAxis)] xAxis @@ [o1 "go-", o2 "linewidth" 2])
+    let p = (\xAxis -> plot [1 .. (length xAxis)] xAxis @@ [ o2 "linewidth" 2])
     let mlineOptions = map p xAxes
     onscreen $ foldr1 (%) mlineOptions
     putStrLn $ "month: " ++ (show xAxes)
