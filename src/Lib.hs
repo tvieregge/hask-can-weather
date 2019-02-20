@@ -8,6 +8,7 @@ module Lib where
 import Graphics.Matplotlib
 
 import Control.Exception
+import System.Directory
 
 import qualified Data.Foldable as Foldable
 import Data.Text.Encoding
@@ -30,6 +31,7 @@ import Data.Csv -- ( DefaultOrdered(headerOrder)
 
 -- import qualified Data.Csv as Cassava
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy.Search as BLS
 
 import Data.Ix
@@ -73,11 +75,13 @@ tryRead :: String -> IO (Either IOException TL.Text)
 tryRead fileName = try $ TLIO.readFile fileName
 
 someFunc :: [String] -> IO ()
-someFunc fileNames = do
-    csvData <- BL.readFile "./data/eng-daily-01011890-12311890.csv"
-    let xAxes = map (monthsData $ cleanData csvData) [January ..]
+someFunc dirName = do
+    fileNames <- listDirectory "./data"
+    files <- sequence . map B.readFile $ map ("./data/"++) fileNames
+    let fileData = mconcat . map decodeFile $ map (BL.fromChunks . (:[])) files
+    let xAxes = map (monthsData $ removeBadRecords fileData) [January ..]
     let mlineOptions = map plotAxis xAxes
-    onscreen $ foldr1 (%) mlineOptions
+    -- onscreen $ foldr1 (%) mlineOptions
     putStrLn $ "month: " ++ (show xAxes)
   where
     plotAxis xAxis = plot [1 .. (length xAxis)] xAxis @@ [o2 "linewidth" 2]
@@ -87,16 +91,16 @@ someFunc fileNames = do
     -- case files of
     --     Left e -> print ("An error occured: " ++ show e)
 
-cleanData :: BL.ByteString -> [DataItem]
-cleanData bs =
+decodeFile :: BL.ByteString -> Vector CsvItem
+decodeFile bs =
     case decodeData of
-        Right x -> formatData x
-        Left e -> [] --putStrLn "Decoding file failed"
+        Right x -> x
+        Left e -> Vector.empty --putStrLn "Decoding file failed"
   where
     decodeData = snd <$> decodeByName (snd $ BLS.breakOn "\"Date/Time" bs)
 
-formatData :: Vector CsvItem -> [DataItem]
-formatData = Vector.foldr go []
+removeBadRecords :: Vector CsvItem -> [DataItem]
+removeBadRecords = Vector.foldr go []
   where
     go r rs =
         case maxTemp r of
