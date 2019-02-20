@@ -9,6 +9,7 @@ import Graphics.Matplotlib
 
 import Control.Exception
 import System.Directory
+import Data.List
 
 import qualified Data.Foldable as Foldable
 import Data.Text.Encoding
@@ -58,18 +59,18 @@ data CsvItem = CsvItem
     , maxTemp :: Either Field Float
     } deriving (Eq, Show)
 
+-- autoformat really messes this up...
+instance FromNamedRecord CsvItem where
+    parseNamedRecord m =
+        CsvItem <$> m .: "Year" <*> m .: "Month" <*> m .: "Day" <*>
+        m .: (encodeUtf8 "Max Temp (°C)")
+
 data DataItem = DataItem
     { dYear :: Int
     , dMonth :: Int
     , dDay :: Int
     , dMaxTemp :: Float
     } deriving (Eq, Show)
-
--- autoformat really messes this up...
-instance FromNamedRecord CsvItem where
-    parseNamedRecord m =
-        CsvItem <$> m .: "Year" <*> m .: "Month" <*> m .: "Day" <*>
-        m .: (encodeUtf8 "Max Temp (°C)")
 
 tryRead :: String -> IO (Either IOException TL.Text)
 tryRead fileName = try $ TLIO.readFile fileName
@@ -78,18 +79,33 @@ someFunc :: [String] -> IO ()
 someFunc dirName = do
     fileNames <- listDirectory "./data"
     files <- sequence . map B.readFile $ map ("./data/"++) fileNames
-    let fileData = mconcat . map decodeFile $ map (BL.fromChunks . (:[])) files
-    let xAxes = map (monthsData $ removeBadRecords fileData) [January ..]
-    let mlineOptions = map plotAxis xAxes
+    let mlineOptions = map plotAxis . xAxes . monthlyData $ fileData files
     -- onscreen $ foldr1 (%) mlineOptions
-    putStrLn $ "month: " ++ (show xAxes)
-  where
-    plotAxis xAxis = plot [1 .. (length xAxis)] xAxis @@ [o2 "linewidth" 2]
+    -- putStrLn $ "month: " ++ (show xAxes)
+    return ()
+    where
+        plotAxis xAxis = plot [1 .. (length xAxis)] xAxis @@ [o2 "linewidth" 2]
+
+xAxes :: [[DataItem]] -> [[Float]]
+xAxes = (fmap . fmap) dMaxTemp . map avgByYear
+
+fileData :: [B.ByteString] -> Vector CsvItem
+fileData fs = mconcat . map decodeFile $ map (BL.fromChunks . (:[])) fs
+
+monthlyData :: Vector CsvItem -> [[DataItem]]
+monthlyData files = map (monthsData $ removeBadRecords files) [January ..]
+
+
     -- n + maxTemp i
     -- eitherFiles <- mapM tryRead fileNames
     -- let files = sequence eitherFiles
     -- case files of
     --     Left e -> print ("An error occured: " ++ show e)
+
+avgByYear :: [DataItem] -> [DataItem]
+avgByYear xs = map sumDataItems grouped
+    where grouped = groupBy (\a b -> (dYear a) == (dYear b)) xs
+          sumDataItems = foldr (\y ys -> DataItem 0 0 0 (dMaxTemp y)) (DataItem 0 0 0 0)
 
 decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
@@ -107,7 +123,5 @@ removeBadRecords = Vector.foldr go []
             Right temp -> DataItem (year r) (month r) (day r) temp : rs
             Left e -> rs
 
-monthsData :: [DataItem] -> Month -> [Float]
-monthsData vs m = map dMaxTemp filtered
-  where
-    filtered = filter (\i -> (dMonth i) == (fromEnum m) + 1) vs
+monthsData :: [DataItem] -> Month -> [DataItem]
+monthsData xs m = filter (\i -> (dMonth i) == (fromEnum m) + 1) xs
