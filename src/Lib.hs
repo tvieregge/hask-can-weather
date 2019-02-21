@@ -78,9 +78,9 @@ tryRead fileName = try $ TLIO.readFile fileName
 someFunc :: [String] -> IO ()
 someFunc dirName = do
     fileNames <- listDirectory "./data"
-    files <- sequence . map B.readFile $ map ("./data/"++) fileNames
+    files <- sequence . map B.readFile . map ("./data/"++) $ filter (isSuffixOf ".csv") fileNames
     let mlineOptions = map plotAxis . xAxes . monthlyData $ fileData files
-    -- onscreen $ foldr1 (%) mlineOptions
+    onscreen $ foldr1 (%) mlineOptions
     -- putStrLn $ "month: " ++ (show xAxes)
     return ()
     where
@@ -90,7 +90,7 @@ xAxes :: [[DataItem]] -> [[Float]]
 xAxes = (fmap . fmap) dMaxTemp . map avgByYear
 
 fileData :: [B.ByteString] -> Vector CsvItem
-fileData fs = mconcat . map decodeFile $ map (BL.fromChunks . (:[])) fs
+fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (:[])) fs
 
 monthlyData :: Vector CsvItem -> [[DataItem]]
 monthlyData files = map (monthsData $ removeBadRecords files) [January ..]
@@ -105,7 +105,7 @@ monthlyData files = map (monthsData $ removeBadRecords files) [January ..]
 avgByYear :: [DataItem] -> [DataItem]
 avgByYear xs = map sumDataItems grouped
     where grouped = groupBy (\a b -> (dYear a) == (dYear b)) xs
-          sumDataItems = foldr (\y ys -> DataItem 0 0 0 (dMaxTemp y)) (DataItem 0 0 0 0)
+          sumDataItems = foldr (\y ys -> DataItem 0 0 0 (dMaxTemp y)) (DataItem 0 0 0 1)
 
 decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
