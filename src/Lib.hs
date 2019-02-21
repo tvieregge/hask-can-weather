@@ -87,16 +87,19 @@ someFunc dirName = do
     files <-
         sequence . map B.readFile . map ("./data/" ++) $
         filter (isSuffixOf ".csv") fileNames
-    let mlineOptions = map plotAxis . xAxes . monthlyData $ fileData files
+    let mlineOptions =
+            map plotAxis .
+            map (sortBy (\x y -> compare (displayYear x) (displayYear y))) .
+            map avgByYear . monthlyData $
+            fileData files
     onscreen $ foldr1 (%) mlineOptions
-    -- putStrLn $ "month: " ++ (show xAxes)
     return ()
   where
-    plotAxis xAxis = plot [1 .. (length xAxis)] xAxis @@ [o2 "linewidth" 2]
+    plotAxis ds =
+        plot (map displayYear ds) (map displayValue ds) @@ [o2 "linewidth" 2]
 
-xAxes :: [[DataItem]] -> [[Float]]
-xAxes = (fmap . fmap) displayValue . map avgByYear
-
+-- xAxes :: [[DataItem]] -> [[Float]]
+-- xAxes = (fmap . fmap) displayValue . map avgByYear
 fileData :: [B.ByteString] -> Vector CsvItem
 fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs
 
@@ -120,7 +123,7 @@ decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
     case decodeData of
         Right x -> x
-        Left e -> Vector.empty --putStrLn "Decoding file failed"
+        Left e -> Vector.empty
   where
     decodeData = snd <$> decodeByName (snd $ BLS.breakOn "\"Date/Time" bs)
 
