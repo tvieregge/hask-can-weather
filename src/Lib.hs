@@ -8,8 +8,8 @@ module Lib where
 import Graphics.Matplotlib
 
 import Control.Exception
-import System.Directory
 import Data.List
+import System.Directory
 
 import qualified Data.Foldable as Foldable
 import Data.Text.Encoding
@@ -30,9 +30,10 @@ import Data.Csv -- ( DefaultOrdered(headerOrder)
     -- , (.=)
     -- )
 
+import qualified Data.ByteString as B
+
 -- import qualified Data.Csv as Cassava
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy.Search as BLS
 
 import Data.Ix
@@ -59,6 +60,11 @@ data CsvItem = CsvItem
     , maxTemp :: Either Field Float
     } deriving (Eq, Show)
 
+data DisplayItem = DisplayItem
+    { displayYear :: Int
+    , displayValue :: Float
+    }
+
 -- autoformat really messes this up...
 instance FromNamedRecord CsvItem where
     parseNamedRecord m =
@@ -78,34 +84,37 @@ tryRead fileName = try $ TLIO.readFile fileName
 someFunc :: [String] -> IO ()
 someFunc dirName = do
     fileNames <- listDirectory "./data"
-    files <- sequence . map B.readFile . map ("./data/"++) $ filter (isSuffixOf ".csv") fileNames
+    files <-
+        sequence . map B.readFile . map ("./data/" ++) $
+        filter (isSuffixOf ".csv") fileNames
     let mlineOptions = map plotAxis . xAxes . monthlyData $ fileData files
     onscreen $ foldr1 (%) mlineOptions
     -- putStrLn $ "month: " ++ (show xAxes)
     return ()
-    where
-        plotAxis xAxis = plot [1 .. (length xAxis)] xAxis @@ [o2 "linewidth" 2]
+  where
+    plotAxis xAxis = plot [1 .. (length xAxis)] xAxis @@ [o2 "linewidth" 2]
 
 xAxes :: [[DataItem]] -> [[Float]]
-xAxes = (fmap . fmap) dMaxTemp . map avgByYear
+xAxes = (fmap . fmap) displayValue . map avgByYear
 
 fileData :: [B.ByteString] -> Vector CsvItem
-fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (:[])) fs
+fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs
 
 monthlyData :: Vector CsvItem -> [[DataItem]]
 monthlyData files = map (monthsData $ removeBadRecords files) [January ..]
-
-
     -- n + maxTemp i
     -- eitherFiles <- mapM tryRead fileNames
     -- let files = sequence eitherFiles
     -- case files of
     --     Left e -> print ("An error occured: " ++ show e)
 
-avgByYear :: [DataItem] -> [DataItem]
+avgByYear :: [DataItem] -> [DisplayItem]
 avgByYear xs = map sumDataItems grouped
-    where grouped = groupBy (\a b -> (dYear a) == (dYear b)) xs
-          sumDataItems = foldr (\y ys -> DataItem 0 0 0 (dMaxTemp y)) (DataItem 0 0 0 1)
+  where
+    grouped = groupBy (\a b -> (dYear a) == (dYear b)) xs
+    sumDataItems l@(y:ys) =
+        DisplayItem (dYear y) $ foldr (\y z -> (dMaxTemp y) + z) 0 l
+    sumDataItems _ = DisplayItem 0 0
 
 decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
