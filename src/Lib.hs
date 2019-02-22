@@ -87,15 +87,16 @@ someFunc dirName = do
     files <-
         sequence . map B.readFile . map ("./data/" ++) $
         filter (isSuffixOf ".csv") fileNames
+    let groupedData = map (movingAvg 10) . map avgByYear . monthlyData $ fileData files
     let mlineOptions =
             map plotAxis .
-            -- map sortBy (\x y -> compare (displayYear x) (displayYear y)) .
-            map (movingAvg 10) . map avgByYear . monthlyData $
-            fileData files
+            map (sortBy (\x y -> compare (fst x) (fst y))) $
+            map (\xs -> zip (displayYear xs) (displayValue xs)) groupedData
     onscreen $ (foldr1 (%) mlineOptions) % grid True
     return ()
   where
-    plotAxis ds = plot (displayYear ds) (displayValue ds)
+    plotAxis items = plot ys xs
+        where (ys,xs) = unzip items
 
 fileData :: [B.ByteString] -> Vector CsvItem
 fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs
@@ -134,7 +135,8 @@ avgByYear xs = toDisplayItem grouped
     toDisplayItem [] = DisplayItem [] [] -- TODO: mempty?
     toDisplayItem dataItems =
         DisplayItem (map (dYear . head) dataItems) $
-        map (sum . map dMaxTemp) dataItems
+        map reduce dataItems
+        where reduce lst = (sum $ map dMaxTemp lst) / (fromIntegral $ length lst)
 
 decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
