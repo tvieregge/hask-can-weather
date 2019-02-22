@@ -87,16 +87,17 @@ someFunc dirName = do
     files <-
         sequence . map B.readFile . map ("./data/" ++) $
         filter (isSuffixOf ".csv") fileNames
-    let groupedData = map (movingAvg 10) . map avgByYear . monthlyData $ fileData files
+    let groupedData =
+            map ((movingAvg 10) . toDisplayItem . groupByYear) . monthlyData $ fileData files
     let mlineOptions =
-            map plotAxis .
-            map (sortBy (\x y -> compare (fst x) (fst y))) $
+            map (plotAxis . sortByYear) $
             map (\xs -> zip (displayYear xs) (displayValue xs)) groupedData
     onscreen $ (foldr1 (%) mlineOptions) % grid True
     return ()
   where
     plotAxis items = plot ys xs
-        where (ys,xs) = unzip items
+      where
+        (ys, xs) = unzip items
 
 fileData :: [B.ByteString] -> Vector CsvItem
 fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs
@@ -113,7 +114,8 @@ monthsData xs m = filter (\i -> (dMonth i) == (fromEnum m) + 1) xs
     --     Left e -> print ("An error occured: " ++ show e)
 
 movingAvg :: Int -> DisplayItem -> DisplayItem
-movingAvg k (DisplayItem ys lst) = DisplayItem (take (length lst - k + 1) ys) $
+movingAvg k (DisplayItem ys lst) =
+    DisplayItem (take (length lst - k + 1) ys) $
     map avg . take (length lst - k + 1) . map (take k) $ tails lst
   where
     avg xs = sum xs / fromIntegral k
@@ -128,15 +130,18 @@ mavg k lst = take (length lst - k) $ map average $ tails lst
 --     DisplayItem (displayYear y) $ foldr (\y z -> (displayValue y) + z) 0 l
 -- sumDsp _ = DisplayItem 0 0
 
-avgByYear :: [DataItem] -> DisplayItem
-avgByYear xs = toDisplayItem grouped
-  where
-    grouped = groupBy (\a b -> (dYear a) == (dYear b)) xs
-    toDisplayItem [] = DisplayItem [] [] -- TODO: mempty?
-    toDisplayItem dataItems =
-        DisplayItem (map (dYear . head) dataItems) $
-        map reduce dataItems
-        where reduce lst = (sum $ map dMaxTemp lst) / (fromIntegral $ length lst)
+groupByYear :: [DataItem] -> [[DataItem]]
+groupByYear xs = groupBy (\a b -> (dYear a) == (dYear b)) xs
+
+toDisplayItem :: [[DataItem]] -> DisplayItem
+toDisplayItem [] = DisplayItem [] [] -- TODO: mempty?
+toDisplayItem dataItems =
+    DisplayItem (map (dYear . head) dataItems) $ map reduce dataItems
+    where
+    reduce lst = (sum $ map dMaxTemp lst) / (fromIntegral $ length lst)
+
+sortByYear :: Ord a => [(a, b)] -> [(a, b)]
+sortByYear xs = sortBy (\x y -> compare (fst x) (fst y)) xs
 
 decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
