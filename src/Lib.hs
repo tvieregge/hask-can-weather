@@ -61,9 +61,9 @@ data CsvItem = CsvItem
     } deriving (Eq, Show)
 
 data DisplayItem = DisplayItem
-    { displayYear :: Int
-    , displayValue :: Float
-    }
+    { displayYear :: [Int]
+    , displayValue :: [Float]
+    } deriving (Show)
 
 -- autoformat really messes this up...
 instance FromNamedRecord CsvItem where
@@ -89,35 +89,52 @@ someFunc dirName = do
         filter (isSuffixOf ".csv") fileNames
     let mlineOptions =
             map plotAxis .
-            map (sortBy (\x y -> compare (displayYear x) (displayYear y))) .
-            map avgByYear . monthlyData $
+            -- map sortBy (\x y -> compare (displayYear x) (displayYear y)) .
+            map (movingAvg 10) . map avgByYear . monthlyData $
             fileData files
-    onscreen $ foldr1 (%) mlineOptions
+    onscreen $ (foldr1 (%) mlineOptions) % grid True
     return ()
   where
-    plotAxis ds =
-        plot (map displayYear ds) (map displayValue ds) @@ [o2 "linewidth" 2]
+    plotAxis ds = plot (displayYear ds) (displayValue ds)
 
--- xAxes :: [[DataItem]] -> [[Float]]
--- xAxes = (fmap . fmap) displayValue . map avgByYear
 fileData :: [B.ByteString] -> Vector CsvItem
 fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs
 
 monthlyData :: Vector CsvItem -> [[DataItem]]
 monthlyData files = map (monthsData $ removeBadRecords files) [January ..]
+
+monthsData :: [DataItem] -> Month -> [DataItem]
+monthsData xs m = filter (\i -> (dMonth i) == (fromEnum m) + 1) xs
     -- n + maxTemp i
     -- eitherFiles <- mapM tryRead fileNames
     -- let files = sequence eitherFiles
     -- case files of
     --     Left e -> print ("An error occured: " ++ show e)
 
-avgByYear :: [DataItem] -> [DisplayItem]
-avgByYear xs = map sumDataItems grouped
+movingAvg :: Int -> DisplayItem -> DisplayItem
+movingAvg k (DisplayItem ys lst) = DisplayItem (take (length lst - k + 1) ys) $
+    map avg . take (length lst - k + 1) . map (take k) $ tails lst
+  where
+    avg xs = sum xs / fromIntegral k
+
+mavg :: Fractional b => Int -> [b] -> [b]
+mavg k lst = take (length lst - k) $ map average $ tails lst
+  where
+    average = (/ fromIntegral k) . sum . take k
+
+-- sumDsp :: [DisplayItem] -> DisplayItem
+-- sumDsp l@(y:ys) =
+--     DisplayItem (displayYear y) $ foldr (\y z -> (displayValue y) + z) 0 l
+-- sumDsp _ = DisplayItem 0 0
+
+avgByYear :: [DataItem] -> DisplayItem
+avgByYear xs = toDisplayItem grouped
   where
     grouped = groupBy (\a b -> (dYear a) == (dYear b)) xs
-    sumDataItems l@(y:ys) =
-        DisplayItem (dYear y) $ foldr (\y z -> (dMaxTemp y) + z) 0 l
-    sumDataItems _ = DisplayItem 0 0
+    toDisplayItem [] = DisplayItem [] [] -- TODO: mempty?
+    toDisplayItem dataItems =
+        DisplayItem (map (dYear . head) dataItems) $
+        map (sum . map dMaxTemp) dataItems
 
 decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
@@ -134,6 +151,3 @@ removeBadRecords = Vector.foldr go []
         case maxTemp r of
             Right temp -> DataItem (year r) (month r) (day r) temp : rs
             Left e -> rs
-
-monthsData :: [DataItem] -> Month -> [DataItem]
-monthsData xs m = filter (\i -> (dMonth i) == (fromEnum m) + 1) xs
