@@ -88,9 +88,9 @@ someFunc dirName = do
         sequence . map B.readFile . map ("./data/" ++) $
         filter (isSuffixOf ".csv") fileNames
     let groupedData =
-            map ((movingAvg 10) . toDisplayItem . groupByYear) . monthlyData $ fileData files
+            map ((movingAvg 4) . sortByYear . toDisplayItem . groupByYear) . monthlyData $ fileData files
     let mlineOptions =
-            map (plotAxis . sortByYear) $
+            map plotAxis $
             map (\xs -> zip (displayYear xs) (displayValue xs)) groupedData
     onscreen $ (foldr1 (%) mlineOptions) % grid True
     return ()
@@ -115,10 +115,11 @@ monthsData xs m = filter (\i -> (dMonth i) == (fromEnum m) + 1) xs
 
 movingAvg :: Int -> DisplayItem -> DisplayItem
 movingAvg k (DisplayItem ys lst) =
-    DisplayItem (take (length lst - k + 1) ys) $
-    map avg . take (length lst - k + 1) . map (take k) $ tails lst
+    DisplayItem (take resultLength ys) $
+    map avg . take resultLength . map (take k) $ tails lst
   where
     avg xs = sum xs / fromIntegral k
+    resultLength = length lst - k + 1
 
 mavg :: Fractional b => Int -> [b] -> [b]
 mavg k lst = take (length lst - k) $ map average $ tails lst
@@ -140,8 +141,12 @@ toDisplayItem dataItems =
     where
     reduce lst = (sum $ map dMaxTemp lst) / (fromIntegral $ length lst)
 
-sortByYear :: Ord a => [(a, b)] -> [(a, b)]
-sortByYear xs = sortBy (\x y -> compare (fst x) (fst y)) xs
+sortByYear :: DisplayItem -> DisplayItem
+sortByYear xs = unzipDI . sortBy (\x y -> compare (fst x) (fst y)) $ zipDI xs
+    where zipDI di = zip (displayYear di) (displayValue di)
+          unzipDI pairs =
+              let unzipped = unzip pairs
+                  in DisplayItem (fst unzipped) (snd unzipped)
 
 decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
