@@ -60,16 +60,16 @@ data CsvItem = CsvItem
     , maxTemp :: Either Field Float
     } deriving (Eq, Show)
 
-data DisplayItem = DisplayItem
-    { displayYear :: [Int]
-    , displayValue :: [Float]
-    } deriving (Show)
-
 -- autoformat really messes this up...
 instance FromNamedRecord CsvItem where
     parseNamedRecord m =
         CsvItem <$> m .: "Year" <*> m .: "Month" <*> m .: "Day" <*>
         m .: (encodeUtf8 "Max Temp (°C)")
+
+data DisplayItem = DisplayItem
+    { displayYear :: [Int]
+    , displayValue :: [Float]
+    } deriving (Show)
 
 data DataItem = DataItem
     { dYear :: Int
@@ -88,11 +88,15 @@ someFunc dirName = do
         sequence . map B.readFile . map ("./data/" ++) $
         filter (isSuffixOf ".csv") fileNames
     let groupedData =
-            map ((movingAvg 4) . sortByYear . toDisplayItem . groupByYear) . monthlyData $ fileData files
+            map ((movingAvg 4) . sortByYear . toDisplayItem . groupByYear) .
+            monthlyData $
+            fileData files
     let mlineOptions =
             map plotAxis $
             map (\xs -> zip (displayYear xs) (displayValue xs)) groupedData
-    onscreen $ (foldr1 (%) mlineOptions) % grid True
+    onscreen $
+        (foldr1 (%) mlineOptions) % grid True %
+        (legend @@ [o2 "labels" (map show [January ..]), o2 "loc" "upper left"])
     return ()
   where
     plotAxis items = plot ys xs
@@ -130,7 +134,6 @@ mavg k lst = take (length lst - k) $ map average $ tails lst
 -- sumDsp l@(y:ys) =
 --     DisplayItem (displayYear y) $ foldr (\y z -> (displayValue y) + z) 0 l
 -- sumDsp _ = DisplayItem 0 0
-
 groupByYear :: [DataItem] -> [[DataItem]]
 groupByYear xs = groupBy (\a b -> (dYear a) == (dYear b)) xs
 
@@ -138,15 +141,16 @@ toDisplayItem :: [[DataItem]] -> DisplayItem
 toDisplayItem [] = DisplayItem [] [] -- TODO: mempty?
 toDisplayItem dataItems =
     DisplayItem (map (dYear . head) dataItems) $ map reduce dataItems
-    where
+  where
     reduce lst = (sum $ map dMaxTemp lst) / (fromIntegral $ length lst)
 
 sortByYear :: DisplayItem -> DisplayItem
 sortByYear xs = unzipDI . sortBy (\x y -> compare (fst x) (fst y)) $ zipDI xs
-    where zipDI di = zip (displayYear di) (displayValue di)
-          unzipDI pairs =
-              let unzipped = unzip pairs
-                  in DisplayItem (fst unzipped) (snd unzipped)
+  where
+    zipDI di = zip (displayYear di) (displayValue di)
+    unzipDI pairs =
+        let unzipped = unzip pairs
+         in DisplayItem (fst unzipped) (snd unzipped)
 
 decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
