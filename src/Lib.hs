@@ -81,6 +81,7 @@ data DataItem = DataItem
 tryRead :: String -> IO (Either IOException TL.Text)
 tryRead fileName = try $ TLIO.readFile fileName
 
+-- processData :: [B.ByteString] [DisplayItems]
 someFunc :: [String] -> IO ()
 someFunc dirName = do
     fileNames <- listDirectory "./data"
@@ -91,17 +92,13 @@ someFunc dirName = do
             map ((movingAvg 4) . sortByYear . toDisplayItem . groupByYear) .
             monthlyData $
             fileData files
-    let mlineOptions =
-            map plotAxis $
-            map (\xs -> zip (displayYear xs) (displayValue xs)) groupedData
+    let mlineOptions = map plotAxis $ groupedData
     onscreen $
         (foldr1 (%) mlineOptions) % grid True %
         (legend @@ [o2 "labels" (map show [January ..]), o2 "loc" "upper left"])
     return ()
   where
-    plotAxis items = plot ys xs
-      where
-        (ys, xs) = unzip items
+    plotAxis item = plot (displayYear item) (displayValue item)
 
 fileData :: [B.ByteString] -> Vector CsvItem
 fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs
