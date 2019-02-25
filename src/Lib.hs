@@ -9,7 +9,6 @@ import Control.Exception
 import Data.List
 import System.Directory
 
-import qualified Data.Foldable as Foldable
 import Data.Text.Encoding
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.IO as TLIO
@@ -22,7 +21,6 @@ import qualified Data.ByteString as B
 -- cassava
 import Data.Csv
 
--- import qualified Data.Csv as Cassava
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Search as BLS
 
@@ -68,16 +66,19 @@ data DataItem = DataItem
     , dMaxTemp :: Float
     } deriving (Eq, Show)
 
-tryRead :: String -> IO (Either IOException TL.Text)
-tryRead fileName = try $ TLIO.readFile fileName
-
 run :: Int -> String -> IO ()
 run averagingWindow dirName = do
-    fileNames <- listDirectory dirName
-    let csvFiles = filter (isSuffixOf ".csv") fileNames
-    fileData <- sequence $ map (B.readFile . ((dirName ++ "/") ++)) csvFiles
-    onscreen . makePlot $ processData averagingWindow fileData
-    return ()
+    eitherFileNames <- tryLS dirName
+    case eitherFileNames of
+         Left e -> print ("Couldn't read directory: " ++ show e)
+         Right fileNames -> do
+            let csvFiles = filter (isSuffixOf ".csv") fileNames
+            fileData <- sequence $ map (B.readFile . ((dirName ++ "/") ++)) csvFiles
+            onscreen . makePlot $ processData averagingWindow fileData
+            return ()
+
+tryLS :: String -> IO (Either IOException [FilePath])
+tryLS fileName = try $ listDirectory fileName
 
 makePlot :: [DisplayItem] -> Matplotlib
 makePlot displayData =
@@ -105,11 +106,6 @@ monthlyData files = map (monthsData $ removeBadRecords files) [January ..]
 
 monthsData :: [DataItem] -> Month -> [DataItem]
 monthsData xs m = filter (\i -> dMonth i == fromEnum m + 1) xs
-    -- n + maxTemp i
-    -- eitherFiles <- mapM tryRead fileNames
-    -- let files = sequence eitherFiles
-    -- case files of
-    --     Left e -> print ("An error occured: " ++ show e)
 
 movingAvg :: Int -> DisplayItem -> DisplayItem
 movingAvg k (DisplayItem ys lst) =
@@ -124,10 +120,6 @@ mavg k lst = take (length lst - k) $ map average $ tails lst
   where
     average = (/ fromIntegral k) . sum . take k
 
--- sumDsp :: [DisplayItem] -> DisplayItem
--- sumDsp l@(y:ys) =
---     DisplayItem (displayYear y) $ foldr (\y z -> (displayValue y) + z) 0 l
--- sumDsp _ = DisplayItem 0 0
 groupByYear :: [DataItem] -> [[DataItem]]
 groupByYear = groupBy (\a b -> dYear a == dYear b)
 
@@ -144,7 +136,7 @@ sortByYear xs = unzipDI . sortBy (\x y -> compare (fst x) (fst y)) $ zipDI xs
     zipDI di = zip (displayYear di) (displayValue di)
     unzipDI pairs =
         let unzipped = unzip pairs
-         in DisplayItem (fst unzipped) (snd unzipped)
+         in uncurry DisplayItem unzipped
 
 decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
