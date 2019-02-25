@@ -1,6 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
 
 module Lib where
@@ -19,9 +17,10 @@ import qualified Data.Text.Lazy.IO as TLIO
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector
 
+import qualified Data.ByteString as B
+
 -- cassava
 import Data.Csv
-import qualified Data.ByteString as B
 
 -- import qualified Data.Csv as Cassava
 import qualified Data.ByteString.Lazy as BL
@@ -55,7 +54,7 @@ data CsvItem = CsvItem
 instance FromNamedRecord CsvItem where
     parseNamedRecord m =
         CsvItem <$> m .: "Year" <*> m .: "Month" <*> m .: "Day" <*>
-        m .: (encodeUtf8 "Max Temp (°C)")
+        m .: encodeUtf8 "Max Temp (°C)"
 
 data DisplayItem = DisplayItem
     { displayYear :: [Int]
@@ -72,8 +71,8 @@ data DataItem = DataItem
 tryRead :: String -> IO (Either IOException TL.Text)
 tryRead fileName = try $ TLIO.readFile fileName
 
-someFunc :: Int -> String -> IO ()
-someFunc averagingWindow dirName = do
+run :: Int -> String -> IO ()
+run averagingWindow dirName = do
     fileNames <- listDirectory dirName
     let csvFiles = filter (isSuffixOf ".csv") fileNames
     fileData <- sequence $ map (B.readFile . ((dirName ++ "/") ++)) csvFiles
@@ -81,19 +80,22 @@ someFunc averagingWindow dirName = do
     return ()
 
 makePlot :: [DisplayItem] -> Matplotlib
-makePlot displayData = rc "legend" @@ [o2 "fontsize" 18] % (foldr1 (%) $ map plotItem displayData) % addOptions
+makePlot displayData =
+    rc "legend" @@ [o2 "fontsize" 18] % (foldr1 (%) $ map plotItem displayData) %
+    addOptions
   where
     plotItem item = plot (displayYear item) (displayValue item)
     addOptions =
         (legend @@ [o2 "labels" (map show [January ..]), o2 "loc" "upper left"]) %
         grid True
-        
+
 processData :: Int -> [B.ByteString] -> [DisplayItem]
 processData window files =
     map (dataPipeline window) . monthlyData $ fileData files
 
 dataPipeline :: Int -> [DataItem] -> DisplayItem
-dataPipeline window = (movingAvg window) . sortByYear . toDisplayItem . groupByYear
+dataPipeline window =
+    movingAvg window . sortByYear . toDisplayItem . groupByYear
 
 fileData :: [B.ByteString] -> Vector CsvItem
 fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs
@@ -102,7 +104,7 @@ monthlyData :: Vector CsvItem -> [[DataItem]]
 monthlyData files = map (monthsData $ removeBadRecords files) [January ..]
 
 monthsData :: [DataItem] -> Month -> [DataItem]
-monthsData xs m = filter (\i -> (dMonth i) == (fromEnum m) + 1) xs
+monthsData xs m = filter (\i -> dMonth i == fromEnum m + 1) xs
     -- n + maxTemp i
     -- eitherFiles <- mapM tryRead fileNames
     -- let files = sequence eitherFiles
@@ -127,14 +129,14 @@ mavg k lst = take (length lst - k) $ map average $ tails lst
 --     DisplayItem (displayYear y) $ foldr (\y z -> (displayValue y) + z) 0 l
 -- sumDsp _ = DisplayItem 0 0
 groupByYear :: [DataItem] -> [[DataItem]]
-groupByYear xs = groupBy (\a b -> (dYear a) == (dYear b)) xs
+groupByYear = groupBy (\a b -> dYear a == dYear b)
 
 toDisplayItem :: [[DataItem]] -> DisplayItem
 toDisplayItem [] = DisplayItem [] [] -- TODO: mempty?
 toDisplayItem dataItems =
     DisplayItem (map (dYear . head) dataItems) $ map reduce dataItems
   where
-    reduce lst = (sum $ map dMaxTemp lst) / (fromIntegral $ length lst)
+    reduce lst = sum (map dMaxTemp lst) / fromIntegral (length lst)
 
 sortByYear :: DisplayItem -> DisplayItem
 sortByYear xs = unzipDI . sortBy (\x y -> compare (fst x) (fst y)) $ zipDI xs
