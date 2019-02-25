@@ -20,16 +20,7 @@ import Data.Vector (Vector)
 import qualified Data.Vector as Vector
 
 -- cassava
-import Data.Csv -- ( DefaultOrdered(headerOrder)
-    -- , FromField(parseField)
-    -- , FromNamedRecord(parseNamedRecord)
-    -- , Header
-    -- , ToField(toField)
-    -- , ToNamedRecord(toNamedRecord)
-    -- , (.:)
-    -- , (.=)
-    -- )
-
+import Data.Csv
 import qualified Data.ByteString as B
 
 -- import qualified Data.Csv as Cassava
@@ -69,7 +60,7 @@ instance FromNamedRecord CsvItem where
 data DisplayItem = DisplayItem
     { displayYear :: [Int]
     , displayValue :: [Float]
-    } deriving (Show)
+    } deriving (Show, Eq)
 
 data DataItem = DataItem
     { dYear :: Int
@@ -81,26 +72,28 @@ data DataItem = DataItem
 tryRead :: String -> IO (Either IOException TL.Text)
 tryRead fileName = try $ TLIO.readFile fileName
 
-someFunc :: String -> IO ()
-someFunc dirName = do
+someFunc :: Int -> String -> IO ()
+someFunc averagingWindow dirName = do
     fileNames <- listDirectory dirName
     let csvFiles = filter (isSuffixOf ".csv") fileNames
-    files <- sequence $ map (B.readFile . ((dirName ++ "/") ++)) csvFiles
-    onscreen $ makePlot files
+    fileData <- sequence $ map (B.readFile . ((dirName ++ "/") ++)) csvFiles
+    onscreen . makePlot $ processData averagingWindow fileData
     return ()
 
-makePlot files = addOptions % (foldr1 (%) mlineOptions)
+makePlot :: [DisplayItem] -> Matplotlib
+makePlot displayData = rc "legend" @@ [o2 "fontsize" 18] % (foldr1 (%) $ map plotItem displayData) % addOptions
   where
-    mlineOptions = map plotAxis $ processData files
-    plotAxis item = plot (displayYear item) (displayValue item)
+    plotItem item = plot (displayYear item) (displayValue item)
     addOptions =
         (legend @@ [o2 "labels" (map show [January ..]), o2 "loc" "upper left"]) %
         grid True
+        
+processData :: Int -> [B.ByteString] -> [DisplayItem]
+processData window files =
+    map (dataPipeline window) . monthlyData $ fileData files
 
-processData :: [B.ByteString] -> [DisplayItem]
-processData files =
-    map ((movingAvg 4) . sortByYear . toDisplayItem . groupByYear) . monthlyData $
-    fileData files
+dataPipeline :: Int -> [DataItem] -> DisplayItem
+dataPipeline window = (movingAvg window) . sortByYear . toDisplayItem . groupByYear
 
 fileData :: [B.ByteString] -> Vector CsvItem
 fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs

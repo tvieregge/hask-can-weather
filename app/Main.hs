@@ -3,4 +3,4 @@ module Main where
 import Lib
 
 main :: IO ()
-main = someFunc "./data"
+main = someFunc 4 "./data"
