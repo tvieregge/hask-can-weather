@@ -81,24 +81,26 @@ data DataItem = DataItem
 tryRead :: String -> IO (Either IOException TL.Text)
 tryRead fileName = try $ TLIO.readFile fileName
 
--- processData :: [B.ByteString] [DisplayItems]
-someFunc :: [String] -> IO ()
+someFunc :: String -> IO ()
 someFunc dirName = do
-    fileNames <- listDirectory "./data"
-    files <-
-        sequence . map B.readFile . map ("./data/" ++) $
-        filter (isSuffixOf ".csv") fileNames
-    let groupedData =
-            map ((movingAvg 4) . sortByYear . toDisplayItem . groupByYear) .
-            monthlyData $
-            fileData files
-    let mlineOptions = map plotAxis $ groupedData
-    onscreen $
-        (foldr1 (%) mlineOptions) % grid True %
-        (legend @@ [o2 "labels" (map show [January ..]), o2 "loc" "upper left"])
+    fileNames <- listDirectory dirName
+    let csvFiles = filter (isSuffixOf ".csv") fileNames
+    files <- sequence $ map (B.readFile . ((dirName ++ "/") ++)) csvFiles
+    onscreen $ makePlot files
     return ()
+
+makePlot files = addOptions % (foldr1 (%) mlineOptions)
   where
+    mlineOptions = map plotAxis $ processData files
     plotAxis item = plot (displayYear item) (displayValue item)
+    addOptions =
+        (legend @@ [o2 "labels" (map show [January ..]), o2 "loc" "upper left"]) %
+        grid True
+
+processData :: [B.ByteString] -> [DisplayItem]
+processData files =
+    map ((movingAvg 4) . sortByYear . toDisplayItem . groupByYear) . monthlyData $
+    fileData files
 
 fileData :: [B.ByteString] -> Vector CsvItem
 fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs

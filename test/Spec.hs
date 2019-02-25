@@ -11,4 +11,4 @@ main = hspec $ do
             -- someFunc [bad] `shouldReturn` ()
             -- text <- (TLIO.readFile "./data/eng-daily-01011954-12311954.csv.1")
             -- someFunc [good] `shouldReturn` ()
-            someFunc [bad,good] `shouldReturn` ()
+            someFunc "./data" `shouldReturn` ()
