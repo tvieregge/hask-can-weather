@@ -13,3 +13,21 @@ for year in `seq 1890 2018`;do wget --content-disposition "http://climate.weathe
 * Build the repository with `satck build`
 * Run the command either through ghci or install using `stack install`
 
+## Ex
+```bash
+# Install dependencies for matplotlib
+
+# Clone and build
+git clone https://github.com/tvieregge/hask-can-weather.git
+cd hask-can-weather
+stack build
+
+# Get the data, it can be put anywhere
+cd data
+for year in `seq 1960 2018`;do wget --content-disposition "http://climate.weather.gc.ca/climate_data/bulk_data_e.html?format=csv&stationID=4333&Year=${year}&Day=14&timeframe=2&submit= Download+Data" ;done
+
+# Run the project, '.' being the current directory (which has the data) and 4 being the size of the window for smothing
+stack ghci
+prelude> :main . -w 4
+```
+
