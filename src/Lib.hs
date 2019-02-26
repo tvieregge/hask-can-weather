@@ -26,6 +26,11 @@ import qualified Data.ByteString.Lazy.Search as BLS
 
 import Data.Ix
 
+data Input = Input
+    { averagingWindow :: Int
+    , dirName :: FilePath
+    }
+
 data Month
     = January
     | February
@@ -66,8 +71,8 @@ data DataItem = DataItem
     , dMaxTemp :: Float
     } deriving (Eq, Show)
 
-run :: Int -> String -> IO ()
-run averagingWindow dirName = do
+run :: Input -> IO ()
+run (Input averagingWindow dirName) = do
     eitherFileNames <- tryLS dirName
     case eitherFileNames of
          Left e -> print ("Couldn't read directory: " ++ show e)

@@ -29,6 +29,7 @@ dependencies:
 - bytestring
 - matplotlib >= 0.6.0
 - directory
+- optparse-applicative
 
 library:
   source-dirs: src
