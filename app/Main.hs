@@ -10,24 +10,13 @@ import System.Environment (getArgs)
 input :: Parser Input
 input =
     Input <$>
-    argument
+    option
         auto
-        (value 1 <> showDefault <>
+        (short 'w' <> value 1 <> showDefault <>
          help "window size for moving average (1 disables)") <*>
-    argument str (help "directory containing csv files")
+    argument str (help "directory containing csv files" <> metavar "DIR")
 
--- main :: IO ()
--- main = greet =<< execParser opts
---   where
---     opts = info (sample <**> helper)
---       ( fullDesc
---      <> progDesc "Print a greeting for TARGET"
---      <> header "hello - a test for optparse-applicative" )
 main :: IO ()
 main = run =<< execParser opts
   where
     opts = info (input <**> helper) (fullDesc <> progDesc "Graphs weather data")
--- main = run 4 "./data"
--- main = do
---     args <- getArgs
---     case args ofrun 4 "./data"
