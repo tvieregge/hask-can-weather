@@ -59,9 +59,10 @@ instance FromNamedRecord CsvItem where
         CsvItem <$> m .: "Year" <*> m .: "Month" <*> m .: "Day" <*>
         m .: encodeUtf8 "Max Temp (°C)"
 
-data DisplayItem = DisplayItem
-    { displayYear :: [Int]
-    , displayValue :: [Float]
+-- A list of values to be displayed. 
+data SubplotData = SubplotData
+    { displayYears :: [Int]
+    , displayValues :: [Float]
     } deriving (Show, Eq)
 
 data DataItem = DataItem
@@ -71,6 +72,9 @@ data DataItem = DataItem
     , dMaxTemp :: Float
     } deriving (Eq, Show)
 
+tryLS :: String -> IO (Either IOException [FilePath])
+tryLS fileName = try $ listDirectory fileName
+
 run :: Input -> IO ()
 run (Input averagingWindow dirName) = do
     eitherFileNames <- tryLS dirName
@@ -78,30 +82,27 @@ run (Input averagingWindow dirName) = do
          Left e -> print ("Couldn't read directory: " ++ show e)
          Right fileNames -> do
             let csvFiles = filter (isSuffixOf ".csv") fileNames
-            fileData <- sequence $ map (B.readFile . ((dirName ++ "/") ++)) csvFiles
-            onscreen . makePlot $ processData averagingWindow fileData
+            readData <- sequence $ map (B.readFile . ((dirName ++ "/") ++)) csvFiles
+            onscreen . makePlot $ processData averagingWindow readData
             return ()
 
-tryLS :: String -> IO (Either IOException [FilePath])
-tryLS fileName = try $ listDirectory fileName
-
-makePlot :: [DisplayItem] -> Matplotlib
+-- Make the output plots for matplotlib to show
+makePlot :: [SubplotData] -> Matplotlib
 makePlot displayData =
-    rc "legend" @@ [o2 "fontsize" 18] % (foldr1 (%) $ map plotItem displayData) %
-    addOptions
-  where
-    plotItem item = plot (displayYear item) (displayValue item)
-    addOptions =
-        (legend @@ [o2 "labels" (map show [January ..]), o2 "loc" "upper left"]) %
-        grid True
+    rc "legend" @@ [o2 "fontsize" 18]
+        % (foldr1 (%) $ map plotItem displayData)
+        % (legend @@ [o2 "labels" (map show [January ..]), o2 "loc" "upper left"])
+        % grid True
+    where
+        plotItem item = plot (displayYears item) (displayValues item)
 
-processData :: Int -> [B.ByteString] -> [DisplayItem]
+processData :: Int -> [B.ByteString] -> [SubplotData]
 processData window files =
     map (dataPipeline window) . monthlyData $ fileData files
 
-dataPipeline :: Int -> [DataItem] -> DisplayItem
+dataPipeline :: Int -> [DataItem] -> SubplotData
 dataPipeline window =
-    movingAvg window . sortByYear . toDisplayItem . groupByYear
+    movingAvg window . sortByYear . toSubplotData . groupByYear
 
 fileData :: [B.ByteString] -> Vector CsvItem
 fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs
@@ -112,9 +113,9 @@ monthlyData files = map (monthsData $ removeBadRecords files) [January ..]
 monthsData :: [DataItem] -> Month -> [DataItem]
 monthsData xs m = filter (\i -> dMonth i == fromEnum m + 1) xs
 
-movingAvg :: Int -> DisplayItem -> DisplayItem
-movingAvg k (DisplayItem ys lst) =
-    DisplayItem (take resultLength ys) $
+movingAvg :: Int -> SubplotData -> SubplotData
+movingAvg k (SubplotData ys lst) =
+    SubplotData (take resultLength ys) $
     map avg . take resultLength . map (take k) $ tails lst
   where
     avg xs = sum xs / fromIntegral k
@@ -128,20 +129,20 @@ mavg k lst = take (length lst - k) $ map average $ tails lst
 groupByYear :: [DataItem] -> [[DataItem]]
 groupByYear = groupBy (\a b -> dYear a == dYear b)
 
-toDisplayItem :: [[DataItem]] -> DisplayItem
-toDisplayItem [] = DisplayItem [] [] -- TODO: mempty?
-toDisplayItem dataItems =
-    DisplayItem (map (dYear . head) dataItems) $ map reduce dataItems
+toSubplotData :: [[DataItem]] -> SubplotData
+toSubplotData [] = SubplotData [] [] -- TODO: mempty?
+toSubplotData dataItems =
+    SubplotData (map (dYear . head) dataItems) $ map reduce dataItems
   where
     reduce lst = sum (map dMaxTemp lst) / fromIntegral (length lst)
 
-sortByYear :: DisplayItem -> DisplayItem
+sortByYear :: SubplotData -> SubplotData
 sortByYear xs = unzipDI . sortBy (\x y -> compare (fst x) (fst y)) $ zipDI xs
   where
-    zipDI di = zip (displayYear di) (displayValue di)
+    zipDI di = zip (displayYears di) (displayValues di)
     unzipDI pairs =
         let unzipped = unzip pairs
-         in uncurry DisplayItem unzipped
+         in uncurry SubplotData unzipped
 
 decodeFile :: BL.ByteString -> Vector CsvItem
 decodeFile bs =
