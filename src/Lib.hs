@@ -59,7 +59,7 @@ instance FromNamedRecord CsvItem where
         CsvItem <$> m .: "Year" <*> m .: "Month" <*> m .: "Day" <*>
         m .: encodeUtf8 "Max Temp (°C)"
 
--- A list of values to be displayed. 
+-- A list of values to be displayed.
 data SubplotData = SubplotData
     { displayYears :: [Int]
     , displayValues :: [Float]
@@ -96,23 +96,36 @@ makePlot displayData =
     where
         plotItem item = plot (displayYears item) (displayValues item)
 
+-- Transform the raw files into the finale representation
 processData :: Int -> [B.ByteString] -> [SubplotData]
 processData window files =
-    map (dataPipeline window) . monthlyData $ fileData files
+    map (dataPipeline window) . separateByMonth . sanitizeData $ wrangleData files
 
+-- Take a single months data and transform it to it's final representation
 dataPipeline :: Int -> [DataItem] -> SubplotData
 dataPipeline window =
     movingAvg window . sortByYear . toSubplotData . groupByYear
 
-fileData :: [B.ByteString] -> Vector CsvItem
-fileData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs
+-- Do some wrangleing to get the types to line up
+wrangleData :: [B.ByteString] -> Vector CsvItem
+wrangleData fs = Vector.concat . map decodeFile $ map (BL.fromChunks . (: [])) fs
 
-monthlyData :: Vector CsvItem -> [[DataItem]]
-monthlyData files = map (monthsData $ removeBadRecords files) [January ..]
+-- Remove bad entries while converting types
+sanitizeData :: Vector CsvItem -> [DataItem]
+sanitizeData = Vector.foldr go []
+  where
+    go r rs =
+        case maxTemp r of
+            Right temp -> DataItem (year r) (month r) (day r) temp : rs
+            Left e -> rs
 
-monthsData :: [DataItem] -> Month -> [DataItem]
-monthsData xs m = filter (\i -> dMonth i == fromEnum m + 1) xs
+-- Split the data into groups based on it's month
+separateByMonth :: [DataItem] -> [[DataItem]]
+separateByMonth files = map (filterMonth files) [January ..]
+    where
+        filterMonth xs m = filter (\i -> dMonth i == fromEnum m + 1) xs
 
+-- Calculate the average of the display values using a sliding window.
 movingAvg :: Int -> SubplotData -> SubplotData
 movingAvg k (SubplotData ys lst) =
     SubplotData (take resultLength ys) $
@@ -120,11 +133,6 @@ movingAvg k (SubplotData ys lst) =
   where
     avg xs = sum xs / fromIntegral k
     resultLength = length lst - k + 1
-
-mavg :: Fractional b => Int -> [b] -> [b]
-mavg k lst = take (length lst - k) $ map average $ tails lst
-  where
-    average = (/ fromIntegral k) . sum . take k
 
 groupByYear :: [DataItem] -> [[DataItem]]
 groupByYear = groupBy (\a b -> dYear a == dYear b)
@@ -152,10 +160,3 @@ decodeFile bs =
   where
     decodeData = snd <$> decodeByName (snd $ BLS.breakOn "\"Date/Time" bs)
 
-removeBadRecords :: Vector CsvItem -> [DataItem]
-removeBadRecords = Vector.foldr go []
-  where
-    go r rs =
-        case maxTemp r of
-            Right temp -> DataItem (year r) (month r) (day r) temp : rs
-            Left e -> rs
