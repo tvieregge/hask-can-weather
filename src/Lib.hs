@@ -53,11 +53,13 @@ data CsvItem = CsvItem
     , maxTemp :: Either Field Float
     } deriving (Eq, Show)
 
--- autoformat really messes this up...
+-- A record from the CSV file
 instance FromNamedRecord CsvItem where
     parseNamedRecord m =
-        CsvItem <$> m .: "Year" <*> m .: "Month" <*> m .: "Day" <*>
-        m .: encodeUtf8 "Max Temp (°C)"
+        CsvItem <$> m .: "Year"
+        <*> m .: "Month"
+        <*> m .: "Day"
+        <*> m .: encodeUtf8 "Max Temp (°C)"
 
 -- A list of values to be displayed.
 data SubplotData = SubplotData
@@ -65,6 +67,8 @@ data SubplotData = SubplotData
     , displayValues :: [Float]
     } deriving (Show, Eq)
 
+-- An intermediate type for correctly formatted data
+-- (i.e. no errors in the csv entries)
 data DataItem = DataItem
     { dYear :: Int
     , dMonth :: Int
@@ -75,6 +79,7 @@ data DataItem = DataItem
 tryLS :: String -> IO (Either IOException [FilePath])
 tryLS fileName = try $ listDirectory fileName
 
+-- Entry point of the application
 run :: Input -> IO ()
 run (Input averagingWindow dirName) = do
     eitherFileNames <- tryLS dirName
@@ -104,7 +109,7 @@ processData window files =
 -- Take a single months data and transform it to it's final representation
 dataPipeline :: Int -> [DataItem] -> SubplotData
 dataPipeline window =
-    movingAvg window . sortByYear . toSubplotData . groupByYear
+    movingAvg window . sortByYear . groupIntoSubplots . groupByYear
 
 -- Do some wrangleing to get the types to line up
 wrangleData :: [B.ByteString] -> Vector CsvItem
@@ -137,9 +142,10 @@ movingAvg k (SubplotData ys lst) =
 groupByYear :: [DataItem] -> [[DataItem]]
 groupByYear = groupBy (\a b -> dYear a == dYear b)
 
-toSubplotData :: [[DataItem]] -> SubplotData
-toSubplotData [] = SubplotData [] [] -- TODO: mempty?
-toSubplotData dataItems =
+-- Average the data over each month (this is what we will graph)
+groupIntoSubplots :: [[DataItem]] -> SubplotData
+groupIntoSubplots [] = SubplotData [] [] -- TODO: mempty?
+groupIntoSubplots dataItems =
     SubplotData (map (dYear . head) dataItems) $ map reduce dataItems
   where
     reduce lst = sum (map dMaxTemp lst) / fromIntegral (length lst)
